@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>太渊界：代码飞升 V2.0</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+SC:wght@500&display=swap');
+
+        /* 全局样式：禁止选中，隐藏光标，黑色背景 */
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* 游戏容器 */
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+        }
+
+        canvas {
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.1);
+            border: 1px solid #333;
+            cursor: crosshair; /* 准星光标 */
+        }
+
+        /* --- UI 界面层 --- */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* 让点击穿透到 Canvas */
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 顶部 HUD 面板 */
+        .hud-panel {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px 40px;
+            color: white;
+            text-shadow: 0 0 5px #00ffff;
+            font-family: 'Press Start 2P', cursive; /* 复古像素字体 */
+            font-size: 14px;
+        }
+
+        /* 状态条容器 */
+        .bar-box {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            width: 250px;
+        }
+        .bar-bg {
+            width: 100%;
+            height: 12px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .bar-fill {
+            height: 100%;
+            transition: width 0.2s ease-out;
+        }
+        #hp-bar { background: linear-gradient(90deg, #ff4d4d, #ff0000); box-shadow: 0 0 10px #ff0000; width: 100%; }
+        #exp-bar { background: linear-gradient(90deg, #00ffff, #00bfff); box-shadow: 0 0 10px #00ffff; width: 0%; }
+
+        /* 右下角操作提示 */
+        .controls-hint {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            text-align: right;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 12px;
+            line-height: 1.8;
+        }
+        .key {
+            display: inline-block;
+            padding: 2px 6px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 4px;
+            background: rgba(255,255,255,0.1);
+            margin: 0 2px;
+            font-family: monospace;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        /* --- 弹窗通用样式 (毛玻璃效果) --- */
+        .modal-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px); /* 毛玻璃 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            pointer-events: auto;
+        }
+        
+        .modal-box {
+            background: rgba(0, 20, 40, 0.85);
+            border: 1px solid #00ffff;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            color: white;
+            max-width: 500px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+        h1 { margin: 0 0 10px 0; color: #00ffff; text-shadow: 0 0 10px #00ffff; font-size: 28px; }
+        h2 { color: #fff; margin-bottom: 20px; }
+        p.desc { color: #aaa; font-size: 14px; line-height: 1.6; margin-bottom: 30px; }
+
+        /* 按钮样式 */
+        .btn {
+            background: linear-gradient(45deg, #003333, #006666);
+            border: 1px solid #00ffff;
+            color: #fff;
+            padding: 12px 30px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 10px;
+            transition: all 0.2s;
+            font-family: 'Noto Sans SC', sans-serif;
+            text-shadow: 0 1px 2px black;
+        }
+        .btn:hover {
+            background: linear-gradient(45deg, #00ffff, #00bfff);
+            color: #000;
+            box-shadow: 0 0 20px #00ffff;
+            transform: translateY(-2px);
+            text-shadow: none;
+        }
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            border-color: #aaa;
+        }
+        .btn-secondary:hover {
+            background: #fff;
+            border-color: #fff;
+        }
+
+        /* 卡片选择容器 */
+        .card-container {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        .skill-card {
+            background: rgba(0,0,0,0.6);
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            width: 140px;
+            cursor: pointer;
+            transition: 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .skill-card:hover {
+            border-color: #00ffff;
+            transform: translateY(-5px);
+            background: rgba(0, 50, 50, 0.8);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+        .skill-icon { font-size: 30px; margin-bottom: 10px; display: block; }
+        .skill-name { font-weight: bold; font-size: 14px; color: #fff; display: block; margin-bottom: 5px;}
+        .skill-desc { font-size: 12px; color: #aaa; line-height: 1.4; }
+        
+        /* 工具类 */
+        .hidden { display: none !important; }
+        .highlight { color: #ffd700; font-weight: bold; }
+
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- 游戏画布 -->
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <!-- 界面层 -->
+    <div class="ui-layer">
+        <!-- 顶部面板 -->
+        <div class="hud-panel">
+            <div class="bar-box">
+                <div style="display:flex; justify-content:space-between;">
+                    <span>生命值 (HP)</span>
+                    <span id="hp-text">100/100</span>
+                </div>
+                <div class="bar-bg"><div id="hp-bar" class="bar-fill"></div></div>
+            </div>
+            
+            <div style="text-align: center;">
+                <div id="level-display" style="font-size: 20px; color: #ffd700;">练气初期</div>
+                <div id="score-display" style="font-size: 12px; color: #888; margin-top:5px;">BUGS FIXED: 0</div>
+            </div>
+
+            <div class="bar-box">
+                <div style="display:flex; justify-content:space-between;">
+                    <span>修为 (EXP)</span>
+                    <span id="exp-text">0%</span>
+                </div>
+                <div class="bar-bg"><div id="exp-bar" class="bar-fill"></div></div>
+            </div>
+        </div>
+
+        <!-- 右下角操作提示 -->
+        <div class="controls-hint">
+            <p>移动 <span class="key">↑</span><span class="key">↓</span><span class="key">←</span><span class="key">→</span></p>
+            <p>暂停/菜单 <span class="key">ESC</span> 或 <span class="key">鼠标左键</span></p>
+        </div>
+    </div>
+
+    <!-- 1. 开始界面 -->
+    <div id="start-screen" class="modal-overlay">
+        <div class="modal-box">
+            <h1>太渊界 · 代码飞升</h1>
+            <p class="desc">
+                天道崩坏，BUG横行。<br>
+                作为穿越而来的程序员，<br>
+                请用你的神念（代码）修复这个世界。
+            </p>
+            <div style="margin-bottom: 20px;">
+                <span style="font-size: 40px;">🧛‍♂️ ⚔️ 🐛</span>
+            </div>
+            <button class="btn" onclick="Game.init()">启动系统 (Start)</button>
+        </div>
+    </div>
+
+    <!-- 2. 暂停界面 -->
+    <div id="pause-screen" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h1>已暂停</h1>
+            <p class="desc">系统挂起中...</p>
+            <button class="btn" onclick="Game.togglePause()">继续修仙 (Resume)</button>
+            <button class="btn btn-secondary" onclick="location.reload()">放弃重开 (Restart)</button>
+        </div>
+    </div>
+
+    <!-- 3. 升级界面 -->
+    <div id="upgrade-screen" class="modal-overlay hidden">
+        <div class="modal-box" style="max-width: 600px;">
+            <h2 style="color: #ffd700;">境界突破！</h2>
+            <p class="desc">感悟到了新的法则代码，请选择一项刻录：</p>
+            <div class="card-container" id="card-box">
+                <!-- JS 动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 结算界面 -->
+    <div id="game-over-screen" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h1 style="color: #ff3333;">系统崩溃</h1>
+            <p class="desc">
+                Fatal Error: HP is null.<br>
+                你的神念已消散于虚空。
+            </p>
+            <p>最终境界: <span id="final-level" class="highlight">--</span></p>
+            <p>修复BUG: <span id="final-score" class="highlight">--</span></p>
+            <button class="btn" onclick="location.reload()">重启系统 (Reboot)</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * 游戏核心逻辑 V2.0
+ * 特性：Emoji贴图、霓虹光效、暂停系统、Canvas渲染
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// 自适应屏幕大小
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- 全局配置 ---
+const CONFIG = {
+    colors: {
+        player: '#00ffff',
+        bullet: '#ffcc00',
+        enemy: '#ff3333',
+        bg: '#000'
+    },
+    emojis: {
+        player: '🧛‍♂️', // 主角：吸血鬼/法师形象代表修仙者
+        bullet: '🔥', // 也可以用简单的圆点
+        enemies: ['👾', '🐛', '🦇', '💀', '🦠'], // 怪物池
+        boss: '👹'
+    }
+};
+
+// --- 技能数据库 ---
+const SKILLS = [
+    { id: 'multi', icon: '🔱', name: '多线程并发', desc: '攻击弹道 +1', color: '#ffd700' },
+    { id: 'speed', icon: '⚡', name: '超频运算', desc: '攻速 +25%', color: '#00ffff' },
+    { id: 'damage', icon: '⚔️', name: '底层重构', desc: '伤害 +30%', color: '#ff3333' },
+    { id: 'poison', icon: '🧪', name: '内存泄露', desc: '攻击附带毒伤', color: '#00ff00' },
+    { id: 'guard', icon: '🛡️', name: '防火墙', desc: '获得光环伤害', color: '#aaa' },
+    { id: 'heal', icon: '💊', name: '热修复', desc: '立即回复30%血量', color: '#ff69b4' }
+];
+
+// --- 输入控制 ---
+const Input = {
+    keys: {},
+    init() {
+        window.addEventListener('keydown', e => {
+            this.keys[e.key] = true;
+            if (e.key === 'Escape') Game.togglePause();
+        });
+        window.addEventListener('keyup', e => this.keys[e.key] = false);
+        
+        // 鼠标点击暂停 (仅在游戏进行中且没点到UI时)
+        window.addEventListener('mousedown', (e) => {
+            if (Game.state === 'PLAYING' && e.target === canvas) {
+                Game.togglePause();
+            }
+        });
+    }
+};
+
+// --- 实体类 ---
+class Player {
+    constructor() {
+        this.x = canvas.width / 2;
+        this.y = canvas.height / 2;
+        this.size = 40;
+        this.speed = 5;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.exp = 0;
+        this.maxExp = 100;
+        this.level = 1;
+        this.levelName = ["练气", "筑基", "结丹", "元婴", "化神", "炼虚", "合体", "大乘", "真仙"];
+        
+        // 战斗属性
+        this.atkTimer = 0;
+        this.atkInterval = 20;
+        this.bulletCount = 1;
+        this.damage = 15;
+        this.hasPoison = false;
+        this.hasGuard = false;
+        this.guardAngle = 0;
+    }
+
+    update() {
+        // 移动
+        if (Input.keys['ArrowUp'] || Input.keys['w']) this.y -= this.speed;
+        if (Input.keys['ArrowDown'] || Input.keys['s']) this.y += this.speed;
+        if (Input.keys['ArrowLeft'] || Input.keys['a']) this.x -= this.speed;
+        if (Input.keys['ArrowRight'] || Input.keys['d']) this.x += this.speed;
+
+        // 边界
+        this.x = Math.max(20, Math.min(canvas.width - 20, this.x));
+        this.y = Math.max(20, Math.min(canvas.height - 20, this.y));
+
+        // 射击
+        this.atkTimer++;
+        if (this.atkTimer >= this.atkInterval) {
+            this.shoot();
+            this.atkTimer = 0;
+        }
+        
+        if(this.hasGuard) this.guardAngle += 0.05;
+    }
+
+    shoot() {
+        // 寻找最近敌人
+        let target = null;
+        let minDesc = Infinity;
+        Game.enemies.forEach(e => {
+            let d = Math.hypot(e.x - this.x, e.y - this.y);
+            if (d < minDesc) { minDesc = d; target = e; }
+        });
+
+        let angle = -Math.PI/2;
+        if (target) angle = Math.atan2(target.y - this.y, target.x - this.x);
+
+        // 散弹逻辑
+        let spread = 0.2;
+        let startAngle = angle - (this.bulletCount-1) * spread / 2;
+        
+        for(let i=0; i<this.bulletCount; i++) {
+            let a = startAngle + i * spread;
+            Game.bullets.push(new Bullet(this.x, this.y, a, this.damage, this.hasPoison));
+        }
+    }
+
+    draw() {
+        // 玩家光环
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = CONFIG.colors.player;
+        
+        // 绘制 Emoji 玩家
+        ctx.font = `${this.size}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(CONFIG.emojis.player, this.x, this.y);
+        
+        ctx.shadowBlur = 0;
+
+        // 防火墙特效
+        if (this.hasGuard) {
+            let gx = this.x + Math.cos(this.guardAngle) * 60;
+            let gy = this.y + Math.sin(this.guardAngle) * 60;
+            ctx.font = '20px serif';
+            ctx.fillText('🛡️', gx, gy);
+            
+            // 简单的防环伤害
+            Game.enemies.forEach(e => {
+                if(Math.hypot(gx - e.x, gy - e.y) < 30) e.hit(2);
+            });
+        }
+    }
+    
+    gainExp(val) {
+        this.exp += val;
+        if (this.exp >= this.maxExp) {
+            this.exp = 0;
+            this.maxExp = Math.floor(this.maxExp * 1.4);
+            this.level++;
+            if(this.level > 9) Game.win();
+            else Game.triggerUpgrade();
+        }
+        UI.update();
+    }
+}
+
+class Bullet {
+    constructor(x, y, angle, dmg, isPoison) {
+        this.x = x; this.y = y;
+        this.vx = Math.cos(angle) * 10;
+        this.vy = Math.sin(angle) * 10;
+        this.dmg = dmg;
+        this.isPoison = isPoison;
+        this.life = 100;
+    }
+    update() {
+        this.x += this.vx; this.y += this.vy;
+        this.life--;
+    }
+    draw() {
+        ctx.fillStyle = this.isPoison ? '#00ff00' : CONFIG.colors.bullet;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+}
+
+class Enemy {
+    constructor(isBoss = false) {
+        // 从屏幕边缘生成
+        let side = Math.floor(Math.random() * 4);
+        if (side === 0) { this.x = Math.random()*canvas.width; this.y = -50; }
+        else if (side === 1) { this.x = Math.random()*canvas.width; this.y = canvas.height+50; }
+        else if (side === 2) { this.x = -50; this.y = Math.random()*canvas.height; }
+        else { this.x = canvas.width+50; this.y = Math.random()*canvas.height; }
+
+        this.isBoss = isBoss;
+        this.size = isBoss ? 80 : 30;
+        this.emoji = isBoss ? CONFIG.emojis.boss : CONFIG.emojis.enemies[Math.floor(Math.random() * CONFIG.emojis.enemies.length)];
+        
+        let diff = Game.score / 1000 + 1;
+        this.hp = isBoss ? 2000 * diff : 30 * diff;
+        this.maxHp = this.hp;
+        this.speed = isBoss ? 0.5 : (Math.random() * 1 + 1.5);
+        this.exp = isBoss ? 500 : 20;
+        this.poisonStack = 0;
+    }
+
+    update() {
+        let angle = Math.atan2(Game.player.y - this.y, Game.player.x - this.x);
+        this.x += Math.cos(angle) * this.speed;
+        this.y += Math.sin(angle) * this.speed;
+
+        // 毒伤
+        if (this.poisonStack > 0 && Game.frame % 30 === 0) {
+            this.hp -= this.poisonStack * 5;
+            UI.createDamageText(this.x, this.y - 20, this.poisonStack * 5, '#00ff00');
+            if(this.hp<=0) this.die();
+        }
+
+        // 撞击玩家
+        if (Math.hypot(this.x - Game.player.x, this.y - Game.player.y) < this.size/2 + Game.player.size/2) {
+            Game.player.hp -= this.isBoss ? 50 : 10;
+            UI.update();
+            UI.shake();
+            if (!this.isBoss) this.die();
+            if (Game.player.hp <= 0) Game.over();
+        }
+    }
+
+    hit(dmg, isPoison = false) {
+        this.hp -= dmg;
+        UI.createDamageText(this.x, this.y, Math.floor(dmg), '#fff');
+        if(isPoison) this.poisonStack++;
+        if(this.hp <= 0) this.die();
+    }
+
+    die() {
+        this.dead = true;
+        Game.player.gainExp(this.exp);
+        Game.score += this.exp;
+        // 爆炸特效
+        for(let i=0; i<8; i++) Game.particles.push(new Particle(this.x, this.y, this.isBoss ? '#ff0000' : '#fff'));
+    }
+
+    draw() {
+        ctx.font = `${this.size}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Boss 血条
+        if (this.isBoss) {
+            ctx.fillStyle = 'red';
+            ctx.fillRect(this.x - 40, this.y - 50, 80, 6);
+            ctx.fillStyle = '#00ff00';
+            ctx.fillRect(this.x - 40, this.y - 50, 80 * (this.hp/this.maxHp), 6);
+        }
+
+        // 绘制实体
+        // 受伤闪烁
+        if (Game.frame % 10 < 5) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = this.isBoss ? 'red' : '#purple';
+        }
+        ctx.fillText(this.emoji, this.x, this.y);
+        ctx.shadowBlur = 0;
+
+        if(this.poisonStack > 0) {
+            ctx.font = '12px monospace';
+            ctx.fillStyle = '#00ff00';
+            ctx.fillText(`☠${this.poisonStack}`, this.x, this.y - this.size/2 - 10);
+        }
+    }
+}
+
+class Particle {
+    constructor(x, y, color) {
+        this.x = x; this.y = y;
+        let a = Math.random() * Math.PI * 2;
+        let s = Math.random() * 5;
+        this.vx = Math.cos(a) * s;
+        this.vy = Math.sin(a) * s;
+        this.life = 1.0;
+        this.color = color;
+    }
+    update() {
+        this.x += this.vx; this.y += this.vy;
+        this.life -= 0.05;
+    }
+    draw() {
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.color;
+        ctx.beginPath(); ctx.arc(this.x, this.y, 3, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+class FloatingText {
+    constructor(x, y, text, color) {
+        this.x = x; this.y = y;
+        this.text = text;
+        this.color = color;
+        this.life = 30;
+        this.vy = -1;
+    }
+    update() { this.y += this.vy; this.life--; }
+    draw() {
+        if(this.life<=0) return;
+        ctx.fillStyle = this.color;
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText(this.text, this.x, this.y);
+    }
+}
+
+// --- 游戏主控 ---
+const Game = {
+    state: 'MENU', // MENU, PLAYING, PAUSED, UPGRADE, GAMEOVER
+    frame: 0,
+    score: 0,
+    player: null,
+    bullets: [],
+    enemies: [],
+    particles: [],
+    texts: [],
+    bgStars: [],
+
+    init() {
+        Input.init();
+        // 初始化背景星星
+        for(let i=0; i<100; i++) this.bgStars.push({
+            x: Math.random()*canvas.width, 
+            y: Math.random()*canvas.height, 
+            s: Math.random()*2,
+            v: Math.random()*0.5 + 0.1
+        });
+
+        this.player = new Player();
+        this.bullets = [];
+        this.enemies = [];
+        this.particles = [];
+        this.texts = [];
+        this.score = 0;
+        this.state = 'PLAYING';
+        
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('game-over-screen').classList.add('hidden');
+        UI.update();
+        this.loop();
+    },
+
+    togglePause() {
+        if (this.state === 'PLAYING') {
+            this.state = 'PAUSED';
+            document.getElementById('pause-screen').classList.remove('hidden');
+        } else if (this.state === 'PAUSED') {
+            this.state = 'PLAYING';
+            document.getElementById('pause-screen').classList.add('hidden');
+            this.loop();
+        }
+    },
+
+    triggerUpgrade() {
+        this.state = 'UPGRADE';
+        const box = document.getElementById('card-box');
+        box.innerHTML = '';
+        
+        // 随机抽取3个技能
+        let pool = [...SKILLS];
+        pool.sort(() => Math.random() - 0.5);
+        pool.slice(0, 3).forEach(skill => {
+            let card = document.createElement('div');
+            card.className = 'skill-card';
+            card.style.borderColor = skill.color;
+            card.innerHTML = `
+                <span class="skill-icon">${skill.icon}</span>
+                <span class="skill-name" style="color:${skill.color}">${skill.name}</span>
+                <span class="skill-desc">${skill.desc}</span>
+            `;
+            card.onclick = () => {
+                this.applySkill(skill);
+                document.getElementById('upgrade-screen').classList.add('hidden');
+                this.state = 'PLAYING';
+                this.loop();
+            };
+            box.appendChild(card);
+        });
+        
+        document.getElementById('upgrade-screen').classList.remove('hidden');
+    },
+
+    applySkill(s) {
+        const p = this.player;
+        if (s.id === 'multi') p.bulletCount++;
+        if (s.id === 'speed') p.atkInterval = Math.max(5, p.atkInterval * 0.8);
+        if (s.id === 'damage') p.damage *= 1.3;
+        if (s.id === 'poison') p.hasPoison = true;
+        if (s.id === 'guard') p.hasGuard = true;
+        if (s.id === 'heal') p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.3);
+        UI.update();
+    },
+
+    over() {
+        this.state = 'GAMEOVER';
+        document.getElementById('final-level').innerText = this.player.levelName[Math.min(8, this.player.level-1)];
+        document.getElementById('final-score').innerText = this.score;
+        document.getElementById('game-over-screen').classList.remove('hidden');
+    },
+
+    loop() {
+        if (this.state !== 'PLAYING') return;
+        this.frame++;
+
+        // --- 逻辑更新 ---
+        this.player.update();
+        
+        // 生成敌人
+        if (this.frame % 60 === 0) {
+            this.enemies.push(new Enemy(this.frame > 1800 && this.frame % 1800 === 0));
+        }
+
+        // 更新子弹
+        for (let i = this.bullets.length - 1; i >= 0; i--) {
+            let b = this.bullets[i];
+            b.update();
+            if (b.life <= 0 || b.x<0 || b.x>canvas.width || b.y<0 || b.y>canvas.height) {
+                this.bullets.splice(i, 1);
+                continue;
+            }
+            // 碰撞
+            for (let e of this.enemies) {
+                if (Math.hypot(b.x - e.x, b.y - e.y) < e.size/2) {
+                    e.hit(b.dmg, b.isPoison);
+                    if(!b.isPoison) b.life = 0; // 毒子弹穿透? 这里简化为普通不穿透
+                    this.bullets.splice(i, 1);
+                    break;
+                }
+            }
+        }
+
+        // 更新敌人
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            let e = this.enemies[i];
+            e.update();
+            if (e.dead) this.enemies.splice(i, 1);
+        }
+
+        // 特效
+        this.particles.forEach((p, i) => { p.update(); if(p.life<=0) this.particles.splice(i,1); });
+        this.texts.forEach((t, i) => { t.update(); if(t.life<=0) this.texts.splice(i,1); });
+
+        // --- 绘制 ---
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 1. 绘制动态星空背景
+        ctx.fillStyle = 'white';
+        this.bgStars.forEach(s => {
+            s.y += s.v; 
+            if(s.y > canvas.height) s.y = 0;
+            ctx.globalAlpha = Math.random();
+            ctx.fillRect(s.x, s.y, s.s, s.s);
+        });
+        ctx.globalAlpha = 1.0;
+
+        // 2. 绘制实体
+        this.enemies.forEach(e => e.draw());
+        this.bullets.forEach(b => b.draw());
+        this.player.draw();
+        this.particles.forEach(p => p.draw());
+        this.texts.forEach(t => t.draw());
+
+        requestAnimationFrame(() => this.loop());
+    },
+};
+
+const UI = {
+    shakeTimer: 0,
+    update() {
+        const p = Game.player;
+        if (!p) return;
+        document.getElementById('hp-text').innerText = `${Math.ceil(p.hp)}/${Math.ceil(p.maxHp)}`;
+        document.getElementById('hp-bar').style.width = `${(p.hp/p.maxHp)*100}%`;
+        document.getElementById('exp-text').innerText = `${Math.floor((p.exp/p.maxExp)*100)}%`;
+        document.getElementById('exp-bar').style.width = `${(p.exp/p.maxExp)*100}%`;
+        document.getElementById('level-display').innerText = p.levelName[Math.min(8, p.level-1)];
+        document.getElementById('score-display').innerText = `BUGS FIXED: ${Game.score}`;
+    },
+    createDamageText(x, y, val, color) {
+        Game.texts.push(new FloatingText(x, y, val, color));
+    },
+    shake() {
+        canvas.style.transform = `translate(${Math.random()*10-5}px, ${Math.random()*10-5}px)`;
+        setTimeout(() => canvas.style.transform = 'none', 50);
+    }
+};
+
+</script>
+</body>
+</html>
